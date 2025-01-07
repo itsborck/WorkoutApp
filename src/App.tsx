@@ -34,7 +34,8 @@ export default function App() {
               <Toaster
                 position="bottom-right"
                 toastOptions={{
-                  className: 'dark:bg-gray-800 dark:text-white'
+                  className: 'dark:bg-gray-800 dark:text-white',
+                  position: 'top-center'
                 }}
               />
             </div>

@@ -7,27 +7,53 @@ import { saveWorkout } from '../lib/workouts';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
+const WGER_BASE_URL = 'https://wger.de';
+
+export interface ExerciseSuggestion {
+  value: string;
+  data: {
+    id: number;
+    base_id: number;
+    name: string;
+    category: string;
+    image: string;
+    image_thumbnail: string;
+  };
+}
+
+export interface ApiResponse {
+  suggestions: ExerciseSuggestion[];
+}
+
 export default function Workouts() {
   const [searchTerm, setSearchTerm] = useState('');
   const authContext = useAuth();
   const user = authContext ? authContext.user : null;
   const navigate = useNavigate();
 
-  const { data: exercises, isLoading } = useQuery(
+  const { data: exercises, isLoading } = useQuery<ApiResponse>(
     ['exercises', searchTerm],
     async () => {
-      const response = await axios.get('https://wger.de/api/v2/exercisebaseinfo/', {
+      if (!searchTerm) {
+        return { suggestions: [] };
+      }
+
+      const response = await axios.get('https://wger.de/api/v2/exercise/search/', {
         params: {
+          term: searchTerm,
           language: 2,
-          limit: 20,
-          ...(searchTerm && { name: searchTerm }),
         },
       });
-      return response.data.results;
+      return response.data;
+    },
+    {
+      enabled: Boolean(searchTerm),
+      staleTime: 1000 * 60 * 5,
+      retry: false,
     }
   );
 
-  const handleSaveWorkout = async (exercise: any) => {
+  const handleSaveWorkout = async (exercise: ExerciseSuggestion['data']) => {
     if (!user) {
       toast.error('Please sign in to save workouts');
       navigate('/auth');
@@ -35,7 +61,11 @@ export default function Workouts() {
     }
 
     try {
-      const { error } = await saveWorkout(exercise);
+      const workout = {
+        ...exercise,
+        category: { name: exercise.category },
+      };
+      const { error } = await saveWorkout(workout);
       if (error) throw error;
       toast.success('Workout saved successfully!');
     } catch (error) {
@@ -51,7 +81,7 @@ export default function Workouts() {
           <input
             type="text"
             placeholder="Search exercises..."
-            className="w-full px-4 py-2 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            className="w-full px-4 py-2 pl-10 border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -65,26 +95,29 @@ export default function Workouts() {
         </div>
       ) : (
         <div className="grid gap-6">
-          {exercises?.map((exercise: { id: number; name: string; description: string; muscles: { id: number; name: string; }[]; }) => (
-            <div key={exercise.id} className="bg-white p-6 rounded-lg shadow-md">
+          {exercises?.suggestions.map((exercise: ExerciseSuggestion) => (
+            <div key={exercise.data.id} className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
               <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
-                <div className="flex-1">
-                  <h3 className="text-xl font-semibold mb-2">{exercise.name}</h3>
-                  <p className="text-gray-600 mb-4">{exercise.description}</p>
-                  <div className="flex flex-wrap gap-2 mb-4">
-                    {exercise.muscles.map((muscle) => (
-                      <span
-                        key={muscle.id}
-                        className="bg-indigo-100 text-indigo-800 px-2 py-1 rounded text-sm"
-                      >
-                        {muscle.name}
+                <div className="flex flex-1 gap-4">
+                  {exercise.data.image && (
+                    <img
+                      src={`${WGER_BASE_URL}${exercise.data.image}`}
+                      alt={exercise.value}
+                      className="w-24 h-24 object-cover rounded-lg"
+                    />
+                  )}
+                  <div className="flex-1">
+                    <h3 className="text-xl font-semibold mb-2">{exercise.value}</h3>
+                    <div className="flex flex-wrap gap-2 mb-4">
+                      <span className="bg-indigo-100 dark:bg-indigo-950 text-indigo-800 dark:text-indigo-300 px-2 py-1 rounded text-sm">
+                        {exercise.data.category}
                       </span>
-                    ))}
+                    </div>
                   </div>
                 </div>
                 <button
-                  onClick={() => handleSaveWorkout(exercise)}
-                  className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 w-full md:w-auto"
+                  onClick={() => handleSaveWorkout(exercise.data)}
+                  className="bg-indigo-600 dark:bg-indigo-500 text-white px-4 py-2 rounded hover:bg-indigo-700 dark:hover:bg-indigo-600 w-full md:w-auto"
                 >
                   Save
                 </button>
